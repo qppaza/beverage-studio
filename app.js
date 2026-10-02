@@ -1,0 +1,28 @@
+const base=[
+{name:"Сахар",cat:"Сахар и сироп",kg:94.58,solids:99.85,key:"sugar"},
+{name:"Кислота лимонная, моногидрат",cat:"Кислота",kg:1.55,solids:90.97,key:"acid"},
+{name:"Ароматизатор Дюшес AN1374",cat:"Ароматизатор",kg:.29,solids:null},
+{name:"КПД «Ароматик», раствор красителей «Дюшес»",cat:"Краситель",kg:.10,solids:null},
+{name:"КПД «Ароматик», раствор красителя «Шоколад»",cat:"Краситель",kg:.12,solids:null},
+{name:"Бензоат натрия",cat:"Консервант",kg:.17,solids:99.90,key:"benzoate"},
+{name:"Диоксид углерода",cat:"Диоксид углерода",kg:4.15,solids:0}
+];let items=JSON.parse(localStorage.getItem("bs_items")||"null")||structuredClone(base);
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const fmt=(n,d=2)=>Number(n).toLocaleString("ru-RU",{minimumFractionDigits:d,maximumFractionDigits:d});
+function scale(){return (+$("#volume").value||1000)/1000*(1+(+$("#loss").value||0)/100)}
+function render(){let sc=scale(),tb=$("#ingredients");tb.innerHTML="";items.forEach((x,i)=>{let sv=x.solids==null?null:x.kg*sc*x.solids/100;let tr=document.createElement("tr");tr.innerHTML=`<td><div class=name>${x.name}</div></td><td><span class=category>${x.cat}</span></td><td><input type=number step=.001 value="${(x.kg*sc).toFixed(3)}" data-i=${i} data-f=kg></td><td><input type=number step=.01 placeholder="Не задано" value="${x.solids??""}" data-i=${i} data-f=solids></td><td>${sv==null?"—":fmt(sv,3)}</td><td><button class=remove data-r=${i}>×</button></td>`;tb.appendChild(tr)});
+tb.querySelectorAll("input").forEach(el=>el.onchange=e=>{let i=+e.target.dataset.i,f=e.target.dataset.f;if(f==="kg")items[i].kg=(+e.target.value||0)/scale();else items[i].solids=e.target.value===""?null:+e.target.value;persist();render()});
+tb.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{items.splice(+b.dataset.r,1);persist();render()});calc();doc()}
+function calc(){let sc=scale(),vol=+$("#volume").value||1000,ratio=+$("#ratio").value||4,syr=vol/(1+ratio);$("#syrupVolume").textContent=fmt(syr)+" л";let known=items.reduce((a,x)=>a+(x.solids==null?0:x.kg*sc*x.solids/100),0);let sugar=items.find(x=>x.key==="sugar"),acid=items.find(x=>x.key==="acid"),benz=items.find(x=>x.key==="benzoate");let sugarSV=sugar&&sugar.solids!=null?sugar.kg*sc*sugar.solids/100:0;let inv=known+sugarSV*.0526;$("#fresh").textContent=fmt(known/vol*100);$("#inverted").textContent=fmt(inv/vol*100);$("#syrupBrix").textContent=fmt(known/syr*100);$("#acidity").textContent=acid?fmt((acid.kg*sc*1000/vol)/.7005):"—";let benzoic=benz?benz.kg*sc*1e6/vol*(122.12/144.11):0;$("#benzoic").textContent=fmt(benzoic,1)}
+function doc(){let sc=scale(),vol=+$("#volume").value||1000;$("#docSubtitle").textContent=`На ${fmt(vol)} л готового напитка. Без учёта воды, доводимой до объёма.`;$("#docTable").innerHTML=`<table><thead><tr><th>Наименование</th><th>Количество, кг</th><th>СВ, %</th></tr></thead><tbody>${items.map(x=>`<tr><td>${x.name}</td><td>${fmt(x.kg*sc,3)}</td><td>${x.solids??"—"}</td></tr>`).join("")}</tbody></table>`}
+function persist(){localStorage.setItem("bs_items",JSON.stringify(items))}
+["volume","ratio","loss"].forEach(id=>$("#"+id).oninput=render);
+$("#reset").onclick=()=>{items=structuredClone(base);localStorage.removeItem("bs_items");$("#volume").value=1000;$("#ratio").value=4;$("#loss").value=0;render()};
+$("#save").onclick=()=>{persist();localStorage.setItem("bs_lab",JSON.stringify({fresh:$("#labFresh").value,inv:$("#labInv").value,acid:$("#labAcid").value,note:$("#labNote").value}));alert("Версия сохранена на этом устройстве.")};
+$("#add").onclick=()=>{let name=prompt("Название сырья:");if(name){items.push({name,cat:"Другое",kg:0,solids:null});persist();render()}};
+$$(".tab").forEach(b=>b.onclick=()=>{$$(".tab").forEach(x=>x.classList.remove("active"));$$(".tabpane").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("#"+b.dataset.tab).classList.add("active")});
+$$(".nav").forEach(b=>b.onclick=()=>{$$(".nav").forEach(x=>x.classList.remove("active"));$$(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("#"+b.dataset.view).classList.add("active")});
+$("#theme").onclick=()=>document.body.classList.toggle("dark");
+let lab=JSON.parse(localStorage.getItem("bs_lab")||"{}");$("#labFresh").value=lab.fresh||"";$("#labInv").value=lab.inv||"";$("#labAcid").value=lab.acid||"";$("#labNote").value=lab.note||"";
+$("#csv").onclick=()=>{let rows=[["Наименование","Количество, кг","СВ, %"],...items.map(x=>[x.name,(x.kg*scale()).toFixed(3),x.solids??""])];let csv="\ufeff"+rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(";")).join("\n");let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="beverage_studio_recipe.csv";a.click()};
+render();
